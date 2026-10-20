@@ -28,11 +28,6 @@ names(detections_per_year) <- detections %>%
 detections$time <- as_hms
 detections$date_time <- 
 
-#Clean up species columns
-species_names <- unique(detections$metadata_group_code)
-  
-new species names <- c("raccoon", "white tailed deer", "Coyote", "Cottontail", "Squirrel", "Bird_other",
-                       "turkey")
 
 #Visualize number of detections
 ggplot(detections, aes(x = forcats::fct_infreq(metadata_group_code))) +
@@ -56,3 +51,7 @@ detections %>%
 
 
 #Read in effort data
+
+#Biocube Covariates
+ggplot(BIOCUBE, aes(x = WI_Climate_CHELSA_scd_v2))+
+  geom_density()
