@@ -16,17 +16,19 @@ detections <- vroom("data/Kwasi_Detections_2026-10-06.csv")
 #Create column for year
 detections$year <- year(detections$date)
 
-#Segement detections by year
+#Convert time from secs to HMS
+detections$time <- as_hms(detections$time)
+
+#Create combined date_time
+detections$date_time <- detections$date + seconds(detections$time)
+
+#Segment detections by year
 detections_per_year <- detections %>%
   group_split(year)
 
 names(detections_per_year) <- detections %>%
   distinct(year) %>%
   pull(year)
-
-#Format date_time
-detections$time <- as_hms
-detections$date_time <- 
 
 
 #Visualize number of detections
@@ -48,6 +50,15 @@ detections %>%
   xlab("Percent of Locations Detected")
 
 #Detection Density Plot
+
+#CamTrapR Diel Activity plots
+activityDensity(recordTable = detections_per_year$'2018',
+                speciesCol = "metadata_group_code",
+                species = "COYOTE",
+                recordDateTimeCol = "date_time",
+                recordDateTimeFormat = "ymd HMS",
+                PlotR = TRUE,
+                writePNG = FALSE)
 
 
 #Read in effort data
