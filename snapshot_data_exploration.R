@@ -1,4 +1,4 @@
-#Snapshot data exploration
+#Snapshot data exploration and formatting
 
 library(dplyr)
 library(vroom)
@@ -12,6 +12,12 @@ library(forcats)
 
 #Read in detection data
 detections <- vroom("data/Kwasi_Detections_2026-10-06.csv")
+
+#Read in effort data
+snapshot_effort <- readRDS("data/Kwasi_Effort_Nested_2026-10-06.rds")
+
+#Map sites
+plot(snapshot_effort$lon, snapshot_effort$lat)
 
 #Create column for year
 detections$year <- year(detections$date)
@@ -61,8 +67,21 @@ activityDensity(recordTable = detections_per_year$'2018',
                 writePNG = FALSE)
 
 
-#Read in effort data
-
 #Biocube Covariates
 ggplot(BIOCUBE, aes(x = WI_Climate_CHELSA_scd_v2))+
   geom_density()
+
+snapshot_effort <- snapshot_effort %>%
+  rename(camera_ID = camera_location_seq_no)
+
+site_covars <- BIOCUBE %>%
+  left_join(snapshot_effort, join_by(camera_ID))
+
+site_covars$lat <- as.numeric(site_covars$lat)
+site_covars$lon <- as.numeric(site_covars$lon)
+
+ggplot(site_covars, aes(x = lon, y = lat, colour = WI_Phenology_USGS_MAXT_v2)) + 
+  geom_point()+
+  scale_colour_viridis_c()
+
+#Explore patterns of detections with BIOCUBE covariates
