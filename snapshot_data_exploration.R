@@ -19,8 +19,10 @@ snapshot_effort <- readRDS("data/Kwasi_Effort_Nested_2026-10-06.rds")
 #Map sites
 plot(snapshot_effort$lon, snapshot_effort$lat)
 
-#Create column for year
+#Create column for year, month, and week
 detections$year <- year(detections$date)
+detections$month <- month(detections$date)
+detections$week <- week(detections$date)
 
 #Convert time from secs to HMS
 detections$time <- as_hms(detections$time)
@@ -56,6 +58,12 @@ detections %>%
   xlab("Percent of Locations Detected")
 
 #Detection Density Plot
+detections %>%
+  filter(metadata_group_code == "DEER") %>%
+  ggplot(aes(x = week, color = as.factor(year))) + 
+  geom_density()+
+  theme_classic()
+
 
 #CamTrapR Diel Activity plots
 activityDensity(recordTable = detections_per_year$'2018',
@@ -66,6 +74,11 @@ activityDensity(recordTable = detections_per_year$'2018',
                 PlotR = TRUE,
                 writePNG = FALSE)
 
+#Camera locations CSV
+cam_locations <- site_covars %>%
+  select(camera_ID, lat, lon)
+
+write.csv(cam_locations, file = "data/cam_locations.csv")
 
 #Biocube Covariates
 ggplot(BIOCUBE, aes(x = WI_Climate_CHELSA_scd_v2))+
