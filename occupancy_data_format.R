@@ -19,99 +19,157 @@ detections <- vroom("data/Kwasi_Detections_2026-10-06.csv")
 #Load in effort data
 snapshot_effort <- readRDS("data/Kwasi_Effort_Nested_2026-10-06.rds")
 
-#Extract first and last day of camera operation
-library(dplyr)
-library(purrr)
-library(tidyr)
+#Format for spOccupancy
 
-summarize_camera <- function(x){
-  
-  dates <- sort(unique(x$date))
-  gaps <- diff(dates)
-  
-  tibble(
-    start_date = min(dates),
-    end_date = max(dates),
-    active_days = length(dates),
-    deployment_days = as.numeric(max(dates) - min(dates)) + 1,
-    n_gaps = sum(gaps > 1),
-    total_gap_days = sum(as.numeric(gaps[gaps > 1]) - 1),
-    longest_gap = ifelse(
-      any(gaps > 1),
-      max(as.numeric(gaps[gaps > 1]) - 1),
-      0
-    )
-  )
-}
-
-extract_gaps <- function(x){
-  
-  dates <- sort(unique(x$date))
-  
-  gap_idx <- which(diff(dates) > 1)
-  
-  if(length(gap_idx) == 0){
-    return(NULL)
-  }
-  
-  tibble(
-    gap_start = dates[gap_idx] + 1,
-    gap_end = dates[gap_idx + 1] - 1,
-    gap_days = as.numeric(gap_end - gap_start) + 1
-  )
-}
-
-gap_table <- snapshot_effort %>%
-  select(camera_location_seq_no, data) %>%
-  mutate(gaps = map(data, extract_gaps)) %>%
-  unnest(gaps)
-
-deployment_summary <- snapshot_effort %>%
-  mutate(summary = map(data, summarize_camera)) %>%
-  unnest(summary)
-
-#Identify gaps in camera operation
-extract_runs <- function(x){
-  
-  dates <- sort(unique(x$date))
-  
-  run_id <- cumsum(c(TRUE, diff(dates) > 1))
-  
-  tibble(
-    date = dates,
-    run_id = run_id
-  ) %>%
-    group_by(run_id) %>%
-    summarise(
-      start_date = min(date),
-      end_date = max(date),
-      active_days = n(),
-      .groups = "drop"
-    )
-}
-
-deployment_periods <- snapshot_effort %>%
-  select(camera_location_seq_no, data) %>%
-  mutate(periods = map(data, extract_runs)) %>%
-  unnest(periods)
-
-#Build Camera Operation Matrix
-
+##Extract all unique dates
 all_dates <- seq(
   from = min(dplyr::bind_rows(snapshot_effort$data)$date),
   to   = max(dplyr::bind_rows(snapshot_effort$data)$date),
   by   = "day"
 )
 
-camOp_daily <- sapply(snapshot_effort$data, function(x) {
-  
-  out <- rep(NA, length(all_dates))
-  
-  out[all_dates %in% x$date] <- 1
-  
-  out
-  
-})
+##Assign week number to each date
+week <- floor(
+  as.numeric(all_dates - min(all_dates)) / 7
+) + 1
 
+##Count number of active days per week
+table(week)
 
+##Define weeks within year
+effort_long <- snapshot_effort %>%
+  select(camera_location_seq_no, data) %>%
+  mutate(
+    effort = purrr::map(data, ~{
+      .x %>%
+        mutate(
+          year = lubridate::year(date),
+          week = ceiling(lubridate::yday(date) / 7)
+        ) %>%
+        count(year, week, name = "effort_days")
+    })
+  ) %>%
+  select(camera_location_seq_no, effort) %>%
+  tidyr::unnest(effort)
 
+##Detections by site-year-species
+det_long <- detections %>%
+  mutate(
+    year = lubridate::year(date),
+    week = lubridate::isoweek(date)
+  ) %>%
+  distinct(
+    metadata_group_code,
+    camera_location_seq_no,
+    year,
+    week
+  ) %>%
+  mutate(detected = 1)
+
+##Join detections to effort 
+species_list <- sort(unique(det_long$metadata_group_code))
+
+survey_frame <- tidyr::expand_grid(
+  species = species_list,
+  effort_long
+) %>%
+  rename(
+    camera_location_seq_no = camera_location_seq_no
+  ) %>%
+  left_join(
+    det_long,
+    by = c(
+      "species" = "metadata_group_code",
+      "camera_location_seq_no",
+      "year",
+      "week"
+    )
+  ) %>%
+  mutate(
+    detected = tidyr::replace_na(detected, 0)
+  )
+
+##Define dimensions of array
+species_levels <- sort(unique(detections$metadata_group_code))
+site_levels <- sort(unique(snapshot_effort$camera_location_seq_no))
+year_levels <- sort(unique(detections$year))
+week_levels <- 1:53
+
+##Initialize y array
+y_array <- array(
+  NA,
+  dim = c(
+    length(species_levels),
+    length(site_levels),
+    length(year_levels),
+    length(week_levels)
+  ),
+  dimnames = list(
+    species = species_levels,
+    site = site_levels,
+    year = year_levels,
+    week = week_levels
+  )
+)
+
+##Fill Y Array
+for(i in seq_len(nrow(survey_frame))) {
+  
+  row <- survey_frame[i, ]
+  
+  y_array[
+    match(row$species, species_levels),
+    match(row$camera_location_seq_no, site_levels),
+    match(row$year, year_levels),
+    match(row$week, week_levels)
+  ] <- row$detected
+}
+
+saveRDS(y_array, file = "spoccupancy_array.rds")
+
+#Initialize effort array
+effort_array <- array(
+  NA_real_,
+  dim = c(
+    length(site_levels),
+    length(year_levels),
+    length(week_levels)
+  ),
+  dimnames = list(
+    site = site_levels,
+    year = year_levels,
+    week = week_levels
+  )
+)
+
+##Fill effort array
+for(i in seq_len(nrow(effort_long))) {
+  
+  effort_array[
+    match(effort_long$camera_location_seq_no[i], site_levels),
+    match(effort_long$year[i], year_levels),
+    match(effort_long$week[i], week_levels)
+  ] <- effort_long$effort_days[i]
+  
+}
+
+saveRDS(effort_array, file = "effort_array.rds")
+
+#Extract lat-long from effort and convert to matrix
+coords <- snapshot_effort %>%
+  distinct(
+    camera_location_seq_no,
+    lat,
+    lon
+  ) %>%
+  arrange(
+    match(camera_location_seq_no, site_levels)
+  )
+
+coords <- as.matrix(
+  coords[, c("lon", "lat")]
+)
+
+rownames(coords) <- site_levels
+
+saveRDS(coords, file = "coords.rds")
