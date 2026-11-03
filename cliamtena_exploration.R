@@ -6,7 +6,7 @@ snapshot_climate <- vroom("data/snapshot_climatedata.csv")
 
 #Select phenology relevant variables
 phenology_climate <- snapshot_climate %>%
-  select(Year, ID1, Latitude, Longitude, Elevation, MAP, MAT, bFFP, eFFP, FFP, DD5, PAS, CMD)
+  select(Year, ID1, Latitude, Longitude, Elevation, MAP, MAT, MCMT, MWMT, bFFP, eFFP, FFP, DD5, PAS, CMD)
 
 ggplot(
   phenology_climate,
@@ -23,7 +23,7 @@ ggplot(
   aes(
   x = Longitude,
   y = Latitude,
-  color = FFP
+  color = MWMT
   )
 ) + 
   geom_point(size = 2) + 
