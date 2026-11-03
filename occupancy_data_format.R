@@ -173,3 +173,7 @@ coords <- as.matrix(
 rownames(coords) <- site_levels
 
 saveRDS(coords, file = "coords.rds")
+
+#Occupancy Covariates
+
+# Relative Day

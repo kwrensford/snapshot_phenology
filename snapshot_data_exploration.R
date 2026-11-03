@@ -59,9 +59,9 @@ detections %>%
 
 #Detection Density Plot
 detections %>%
-  filter(metadata_group_code == "DEER") %>%
+  filter(metadata_group_code == "BEAR") %>%
   ggplot(aes(x = week, color = as.factor(year))) + 
-  geom_density()+
+  geom_density(linewidth = 1)+
   theme_classic()
 
 
