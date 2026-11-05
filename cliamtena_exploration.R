@@ -23,10 +23,13 @@ ggplot(
   aes(
   x = Longitude,
   y = Latitude,
-  color = MWMT
+  color = CMD
   )
 ) + 
   geom_point(size = 2) + 
   scale_color_viridis_c() + 
-  facet_wrap(~Year)
+  facet_wrap(~Year) +
+  labs(
+    title = "CMD"
+  )
   
