@@ -1,14 +1,9 @@
 #Snapshot data exploration and formatting
 
-library(dplyr)
-library(vroom)
-library(ggplot2)
-library(camtrapR)
-library(lubridate)
+library(tidyverse)
 library(hms)
 library(unmarked)
 library(viridis)
-library(forcats)
 
 #Read in detection data
 detections <- vroom("data/Kwasi_Detections_2026-10-06.csv")
@@ -59,7 +54,7 @@ detections %>%
 
 #Detection Density Plot
 detections %>%
-  filter(metadata_group_code == "BEAR") %>%
+  filter(metadata_group_code == "DEER") %>%
   ggplot(aes(x = week, color = as.factor(year))) + 
   geom_density(linewidth = 1)+
   theme_classic()
@@ -73,6 +68,45 @@ activityDensity(recordTable = detections_per_year$'2018',
                 recordDateTimeFormat = "ymd HMS",
                 PlotR = TRUE,
                 writePNG = FALSE)
+
+#Generate delta time (intervals between detection)
+detection_intervals <- detections %>%
+  arrange(metadata_group_code, camera_location_seq_no, date_time) %>%
+  group_by(metadata_group_code, camera_location_seq_no,) %>%
+  mutate(delta_time = as.numeric(difftime(date_time, lag(date_time), units = "mins"))) %>%
+  ungroup()
+
+detection_intervals %>%
+  filter(
+    metadata_group_code == "DEER",
+    delta_time < 24 * 60
+  ) %>%
+  ggplot(aes(x = delta_time)) +
+  geom_histogram(binwidth = 5)
+
+#Log time interval
+detection_intervals %>%
+  filter(
+    metadata_group_code == "DEER",
+    delta_time > 0
+  ) %>%
+  ggplot(aes(x = delta_time)) +
+  geom_histogram(bins = 100) +
+  scale_x_log10()
+
+detection_intervals %>%
+  filter(
+    metadata_group_code == "DEER",
+    !is.na(delta_time)
+  ) %>%
+  ggplot(aes(x = delta_time)) +
+  stat_ecdf()
+
+#Visualize detection intervals
+detection_intervals %>%
+  filter(metadata_group_code == "DEER") %>%
+  ggplot(aes(x = delta_time)) + 
+  geom_histogram(binwidth = 5)
 
 #Camera locations CSV
 cam_locations <- site_covars %>%

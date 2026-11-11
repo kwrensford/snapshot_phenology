@@ -1,6 +1,7 @@
 #Cliamte NA Exploration
 
 library(tidyverse)
+library(vroom)
 
 snapshot_climate <- vroom("data/snapshot_climatedata.csv")
 
@@ -23,13 +24,13 @@ ggplot(
   aes(
   x = Longitude,
   y = Latitude,
-  color = CMD
+  color = MAP
   )
 ) + 
   geom_point(size = 2) + 
   scale_color_viridis_c() + 
   facet_wrap(~Year) +
   labs(
-    title = "CMD"
+    title = "MAP"
   )
   
