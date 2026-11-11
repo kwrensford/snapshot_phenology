@@ -108,11 +108,163 @@ detection_intervals %>%
   ggplot(aes(x = delta_time)) + 
   geom_histogram(binwidth = 5)
 
+#Visualize detections per year
+detections %>%
+  ggplot(aes(x = year)) + 
+  geom_bar()
+
 #Camera locations CSV
 cam_locations <- site_covars %>%
   select(camera_ID, lat, lon)
 
 write.csv(cam_locations, file = "data/cam_locations.csv")
+
+#Generate deployment summary for all camera locations
+
+summarize_camera <- function(x){
+  
+  dates <- sort(unique(x$date))
+  gaps <- diff(dates)
+  
+  tibble(
+    start_date = min(dates),
+    end_date = max(dates),
+    active_days = length(dates),
+    deployment_days = as.numeric(max(dates) - min(dates)) + 1,
+    n_gaps = sum(gaps > 1),
+    total_gap_days = sum(as.numeric(gaps[gaps > 1]) - 1),
+    longest_gap = ifelse(
+      any(gaps > 1),
+      max(as.numeric(gaps[gaps > 1]) - 1),
+      0
+    )
+  )
+}
+
+deployment_summary <- snapshot_effort %>%
+  mutate(summary = map(data, summarize_camera)) %>%
+  unnest(summary)
+  
+#Visualize deployment
+deployment_years <- deployment_summary %>%
+  mutate(
+    start_year = year(start_date),
+    end_year = year(end_date)
+  ) %>%
+  rowwise() %>%
+  mutate(year = list(seq(start_year, end_year))) %>%
+  tidyr::unnest(year) %>%
+  ungroup() %>%
+  group_by(camera_location_seq_no, year) %>%
+  summarise(
+    deployment_days = sum(deployment_days),
+    .groups = "drop"
+  )
+
+ggplot(deployment_years,
+       aes(x = year,
+           y = reorder(camera_location_seq_no,
+                       deployment_days,
+                       max),
+           fill = deployment_days)) +
+  geom_tile() +
+  scale_fill_viridis_c(
+    name = "Deployment\ndays"
+  ) +
+  labs(
+    x = "Year",
+    y = "Camera location"
+  ) +
+  theme_bw()
+
+#Deployment effort mapped
+deployment_map <- deployment_summary %>%
+  group_by(camera_location_seq_no, lat, lon) %>%
+  summarise(
+    total_days = sum(deployment_days),
+    n_years = n_distinct(lubridate::year(start_date)),
+    .groups = "drop"
+  )
+
+ggplot(deployment_map,
+       aes(lon, lat,
+           size = total_days,
+           color = n_years)) +
+  geom_point(alpha = 0.8) +
+  scale_color_viridis_c()
+
+
+deployment_quality <- deployment_summary %>%
+  mutate(
+    coverage =
+      deployment_days /
+      (deployment_days + total_gap_days)
+  )
+
+ggplot(deployment_quality,
+       aes(year(start_date),
+           camera_location_seq_no,
+           fill = coverage)) +
+  geom_tile()
+
+#Effort Deployment Visualization
+site_effort <- deployment_summary %>%
+  rowwise() %>%
+  mutate(
+    year = list(seq(year(start_date),
+                    year(end_date)))
+  ) %>%
+  unnest(year) %>%
+  group_by(camera_location_seq_no, lat, lon) %>%
+  summarise(
+    total_active_days = sum(active_days),
+    n_years = n_distinct(year),
+    .groups = "drop"
+  )
+
+
+ggplot(site_effort,
+       aes(lon, lat)) +
+  geom_point(
+    aes(
+      size = total_active_days,
+      color = n_years
+    ),
+    alpha = 0.7
+  ) +
+  scale_color_viridis_c(
+    name = "Years sampled"
+  ) +
+  scale_size_area(
+    name = "Active days",
+    max_size = 12
+  ) +
+  coord_equal() +
+  theme_bw()
+
+site_year <- deployment_summary %>%
+  rowwise() %>%
+  mutate(
+    year = list(seq(year(start_date), year(end_date)))
+  ) %>%
+  unnest(year) %>%
+  group_by(camera_location_seq_no, lat, lon, year) %>%
+  summarise(
+    active_days = sum(active_days),
+    .groups = "drop"
+  )
+
+ggplot(
+  site_year,
+  aes(lon, lat)
+) +
+  geom_point(
+    aes(size = active_days),
+    alpha = 0.6
+  ) +
+  facet_wrap(~year) +
+  coord_equal() +
+  theme_bw()
 
 #Biocube Covariates
 ggplot(BIOCUBE, aes(x = WI_Climate_CHELSA_scd_v2))+
